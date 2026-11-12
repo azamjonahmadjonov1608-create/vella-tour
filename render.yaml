@@ -1,0 +1,29 @@
+# Render Blueprint: sayt + jonli qidiruv + Telegram bot (webhook) — bepul tarif
+services:
+  - type: web
+    name: vella-tour
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: echo "build shart emas"
+    startCommand: node server.mjs
+    healthCheckPath: /api/ping
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_MANAGERS
+        value: "7007068899"
+      - key: TELEGRAM_CHAT_ID
+        value: "7007068899"
+      - key: DAILY_SNAPSHOT
+        value: "0"
+      - key: MARKUP_PERCENT
+        value: "20"
+      - key: BOT_DEADLINE_SEC
+        value: "15"
+      - key: MANAGER_KEY
+        generateValue: true
+      - key: ADMIN_KEY
+        generateValue: true

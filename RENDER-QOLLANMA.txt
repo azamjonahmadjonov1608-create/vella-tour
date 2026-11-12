@@ -1,0 +1,36 @@
+VELLA TOUR — RENDER.COM (BEPUL) GA O'RNATISH
+=============================================
+Natija: Telegram bot + sayt + jonli qidiruv. Kompyuter kerak emas. ~20 daqiqa, bir marta.
+
+1) GITHUB'GA YUKLASH (kod saqlanadigan joy)
+   - github.com ga kiring → o'ng yuqorida "+" → "New repository"
+   - Repository name: vella-tour   →  ✅ PRIVATE ni tanlang (yopiq! ichida narx/komissiya bor)  → "Create repository"
+   - Ochilgan sahifada "uploading an existing file" havolasini bosing
+   - vella-render.zip ni kompyuterda oching, ichidagi vella-tour papkasini oching,
+     undagi HAMMA fayl va papkalarni (lib, public, server.mjs, render.yaml ...) brauzer oynasiga sudrab tashlang
+   - Pastda "Commit changes" ni bosing.
+
+2) RENDER'DA ISHGA TUSHIRISH
+   - render.com → "Get Started" → "GitHub" bilan kiring (ruxsat so'rasa — vella-tour repoga ruxsat bering)
+   - Yuqorida "New +" → "Blueprint" → vella-tour reponi tanlang → "Connect"
+   - TELEGRAM_BOT_TOKEN so'raladi → bot tokenini qo'ying (9288824665:AAGV...)
+   - "Apply" / "Deploy Blueprint" ni bosing. 3-5 daqiqa kuting.
+   - vella-tour → "Logs" bo'limida  "✅ Bot ulandi (webhook): @Vellatour_bot"  chiqishi kerak.
+   - Sayt manzili yuqorida ko'rinadi: https://vella-tour-xxxx.onrender.com
+
+3) UXLAMASLIGI UCHUN (muhim!)
+   Render bepul serveri 15 daqiqa jim tursa uxlaydi. Bot baribir javob beradi (Telegram uni uyg'otadi),
+   lekin birinchi javob 1 daqiqa kechikadi. Doim tez bo'lishi uchun:
+   - cron-job.org → ro'yxatdan o'ting → "Create cronjob"
+   - URL:  https://vella-tour-xxxx.onrender.com/api/ping   (o'zingizning manzil)
+   - Har 10 daqiqada (Every 10 minutes) → "Create".
+
+4) TEKSHIRISH
+   - Telegram'da @Vellatour_bot ga yozing: "Dubay 25 noyabr 6 kecha 2 katta"
+   - Sayt: https://vella-tour-xxxx.onrender.com (narxlar birinchi marta 10-15 daqiqada to'ladi)
+
+ESLATMA
+   - Bot bir vaqtda faqat BITTA joyda ishlasin: kompyuterdagi start-bot-windows.bat ni yopib qo'ying.
+   - Centrum/Anex login: Render → vella-tour → Environment → Add: CENTRUM_LOGIN, CENTRUM_PASSWORD, ANEX_LOGIN, ANEX_PASSWORD → Save.
+   - Menejer paroli (saytdagi #menejer): Render → Environment → MANAGER_KEY qiymati.
+   - Kodni yangilash: GitHub'da fayllarni qayta yuklasangiz, Render o'zi yangilaydi.

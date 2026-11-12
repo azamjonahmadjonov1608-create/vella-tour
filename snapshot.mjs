@@ -63,7 +63,7 @@ for (const [k, list] of Object.entries(results)) {
     const key = [r.date, r.nights, normName(r.hotel), r.meal].join("|");
     if (!best.has(key) || best.get(key).price > r.price) best.set(key, r);
   }
-  const sorted = [...best.values()].filter(r => parseInt(r.nights) > 0).sort((a, b) => a.price - b.price);
+  const sorted = [...best.values()].filter(r => parseInt(r.nights) > 0 && r.seats !== "yo'q").sort((a, b) => a.price - b.price);
   // Har bir uchish sanasi va kechalar soni uchun eng arzon bir nechta mehmonxonani olamiz —
   // shunda istalgan sana/kecha tanlanganda natija chiqadi
   const PER_SLOT = 3, slots = new Map(), picked = [];

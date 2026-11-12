@@ -1,0 +1,45 @@
+VELLA TOUR — ORACLE CLOUD (BEPUL) SERVERGA O'RNATISH
+=====================================================
+Natija: sayt + jonli qidiruv + Telegram bot 24/7, narxlar har kecha 00:00 da yangilanadi.
+Kompyuteringiz o'chiq bo'lsa ham ishlaydi. Vaqt: ~30-40 daqiqa (bir marta).
+
+1) RO'YXATDAN O'TISH
+   - https://www.oracle.com/cloud/free/  → "Start for free"
+   - Home Region: Frankfurt yoki Stockholm (keyin o'zgartirib bo'lmaydi).
+   - Karta so'raladi — faqat tekshirish uchun, "Always Free" resurslar uchun pul yechilmaydi.
+
+2) SERVER YARATISH
+   - Menyu → Compute → Instances → "Create instance"
+   - Image: Canonical Ubuntu 22.04 (yoki 24.04)
+   - Shape: "Ampere VM.Standard.A1.Flex" (1 OCPU, 6 GB) — "Always Free eligible" yozuvi bo'lsin.
+     "Out of capacity" desa: VM.Standard.E2.1.Micro ni tanlang (u ham bepul, yetadi).
+   - "Add SSH keys" → "Generate a key pair for me" → "Save private key" (ssh-key.key faylini saqlang!)
+   - "Create" → 1-2 daqiqada "Running" bo'ladi. "Public IP address" ni yozib oling.
+
+3) 80-PORTNI OCHISH (sayt ko'rinishi uchun)
+   - Instance sahifasi → Subnet nomini bosing → Security Lists → Default Security List
+   - "Add Ingress Rules": Source CIDR 0.0.0.0/0, IP Protocol TCP, Destination Port Range 80 → Add.
+
+4) FAYLNI SERVERGA YUKLASH (Windows'da: Pusk → "PowerShell" ni oching)
+   cd Downloads
+   scp -i ssh-key.key vella-server.zip ubuntu@SERVER_IP:~
+   (birinchi marta "yes" deb yozing)
+
+5) O'RNATISH
+   ssh -i ssh-key.key ubuntu@SERVER_IP
+   sudo apt-get install -y unzip
+   unzip vella-server.zip && sudo bash vella-server/install.sh
+   - Bot tokeni, Telegram ID va menejer parolini so'raydi — yozing.
+   - Oxirida "✅ TAYYOR!" va sayt manzili chiqadi: http://SERVER_IP
+
+6) TEKSHIRISH
+   - Brauzerda http://SERVER_IP — sayt ochiladi (narxlar 15-25 daqiqada to'ladi).
+   - Telegram'da botga /start yozing.
+
+KEYINCHALIK
+   - Sozlama o'zgartirish (Centrum/Anex login va b.):  sudo nano /opt/vella/.env  →  sudo systemctl restart vella
+   - Yangi versiya o'rnatish: yangi zipni yuklab, 5-qadamni takrorlang (.env saqlanib qoladi).
+   - Loglar: journalctl -u vella -f        Narxlarni hozir yangilash: sudo systemctl start vella-snapshot
+   - Domen (vellatour.uz) olsangiz — A yozuvini SERVER_IP ga yo'naltiring, https ni keyin ulaymiz.
+
+Xato chiqsa — ekrandagi matnni Claude'ga yuboring.

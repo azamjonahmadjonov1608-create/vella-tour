@@ -9,11 +9,12 @@ import { OPERATORS, COUNTRY_UZ } from "./lib/operators.mjs";
 import { getMeta, searchOperator, normCountry } from "./lib/samo.mjs";
 import crypto from "node:crypto";
 import { initOrders, createOrder, getOrder, updateOrder, allOrders, publicOrder } from "./lib/orders.mjs";
-import { usdRate, paymentLinks, paymeHandler, clickHandler } from "./lib/payments.mjs";
+import { usdRate, paymentLinks, paymeHandler, clickHandler, paymentsEnabled } from "./lib/payments.mjs";
 import { autoBook } from "./lib/booking.mjs";
 import { initPhotos, learn, idFor, photoFor } from "./lib/photos.mjs";
-import { startBot, runQuery, offerFor, describe, managerDetails } from "./lib/bot.mjs";
+import { startBot, runQuery, offerFor, describe, managerDetails, botWebhook } from "./lib/bot.mjs";
 import { managerText, defaultPicks } from "./lib/tur.mjs";
+import { recheck } from "./lib/recheck.mjs";
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
 // .env faylini o'qish (kutubxonasiz)
@@ -33,17 +34,24 @@ const cache = new Map();
 const TUR_CACHE = new Map();
 // Windows/kompyuterda: har kuni 07:40 (Toshkent) da narxlar bazasini o'zi yangilaydi (Linux serverda buni systemd timer qiladi)
 function dailySnapshot() {
+  // Windows/kompyuter yoki DAILY_SNAPSHOT=1 (Render): har kuni tunda 00:00 (Toshkent) dan keyin bir marta,
+  // yoki baza yo'q / 20 soatdan eski bo'lsa — darhol (Render uyg'onganda ham). Linux serverda buni systemd timer qiladi.
   if (process.platform !== "win32" && process.env.DAILY_SNAPSHOT !== "1") return;
-  let last = "";
+  const file = path.join(DIR, "public", "packages.json");
+  let running = false;
   const tick = async () => {
-    const tz = new Date(Date.now() + 5 * 3600e3), day = tz.toISOString().slice(0, 10), hm = tz.getUTCHours() * 60 + tz.getUTCMinutes();
-    if (hm >= 7 * 60 + 40 && last !== day) {
-      last = day;
+    if (running) return;
+    let age = Infinity; try { age = Date.now() - fs.statSync(file).mtimeMs; } catch {}
+    const tz = new Date(Date.now() + 5 * 3600e3), today = tz.toISOString().slice(0, 10);
+    let madeDay = ""; try { madeDay = new Date(fs.statSync(file).mtimeMs + 5 * 3600e3).toISOString().slice(0, 10); } catch {}
+    if (age > 20 * 3600e3 || madeDay !== today) {
+      running = true;
       const { spawn } = await import("node:child_process");
-      spawn(process.execPath, ["snapshot.mjs"], { cwd: DIR, stdio: "inherit" });
+      const p = spawn(process.execPath, ["snapshot.mjs", file], { cwd: DIR, stdio: "inherit" });
+      p.on("exit", () => { running = false; });
     }
   };
-  setInterval(tick, 10 * 60 * 1000).unref(); tick();
+  setInterval(tick, 10 * 60 * 1000).unref(); setTimeout(tick, 30000);
 } // menejer qidiruvlari 10 daqiqa saqlanadi (taklif uchun boshqa mehmonxonalarni tanlaganda qayta qidirmaslik uchun)
 const RESULTS = new Map(); // rid -> { r (operator ma'lumoti bilan), q, price, at } — narxni mijoz o'zgartira olmasligi uchun
 initOrders(path.join(DIR, "data"));
@@ -53,7 +61,7 @@ const airlineOf = (t) => { for (const [re, n] of AIRLINES) if (re.test(t)) retur
 
 const send = (res, code, body, type = "application/json; charset=utf-8") => {
   res.writeHead(code, { "Content-Type": type, "Cache-Control": type.startsWith("application/json") ? "no-store" : "public, max-age=300",
-    // sayt boshqa manzilda (masalan GitHub Pages) turganda ham API ishlashi uchun
+    // sayt boshqa manzilda (GitHub Pages) turganda ham API ishlashi uchun
     "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "Content-Type, x-key, x-admin-key", "Access-Control-Allow-Methods": "GET, POST, OPTIONS" });
   res.end(typeof body === "string" || Buffer.isBuffer(body) ? body : JSON.stringify(body));
 };
@@ -68,6 +76,19 @@ async function countries() {
 }
 
 function validDate(s) { return /^\d{4}-\d{2}-\d{2}$/.test(s || ""); }
+
+// Operator qatorini mijozga ko'rsatiladigan ko'rinishga o'tkazadi va rid bilan eslab qoladi
+function toClient(r, q) {
+  const pax = (+q.adults) + (+q.kids || 0);
+  const price = Math.round(r.price * (1 + MARKUP));
+  const rid = crypto.createHash("sha1").update(JSON.stringify([r.op, r.claim || r.code, r.date, r.hotel, r.room, r.meal, r.price, q.adults, q.kids])).digest("hex").slice(0, 16);
+  RESULTS.set(rid, { r, q, price, perPerson: Math.round(price / pax), at: Date.now() });
+  return {
+    rid, src: CODE[r.op], airline: airlineOf(r.tour), photo: idFor(r) ? "/api/photo?id=" + idFor(r) : "", date: r.date, time: r.time, nights: +r.nights, tour: r.tour,
+    hotel: r.hotel, region: r.region, stars: r.stars, meal: r.meal, mealText: r.mealText, room: r.room,
+    price, perPerson: Math.round(price / pax), currency: "USD", code: r.code, seats: r.seats
+  };
+}
 
 async function search(q) {
   const key = JSON.stringify(q);
@@ -88,19 +109,9 @@ async function search(q) {
     const k = [r.date, r.nights, r.hotel.toLowerCase(), r.meal, r.room.toLowerCase()].join("|");
     if (!best.has(k) || best.get(k).price > r.price) best.set(k, r);
   }
-  const pax = (+q.adults) + (+q.kids || 0);
   const results = [...best.values()]
-    .filter(r => r.currency === "USD")
-    .map(r => {
-      const price = Math.round(r.price * (1 + MARKUP));
-      const rid = crypto.createHash("sha1").update(JSON.stringify([r.op, r.claim || r.code, r.date, r.hotel, r.room, r.meal, r.price, q.adults, q.kids])).digest("hex").slice(0, 16);
-      RESULTS.set(rid, { r, q, price, perPerson: Math.round(price / pax), at: Date.now() });
-      return {
-        rid, src: CODE[r.op], airline: airlineOf(r.tour), photo: idFor(r) ? "/api/photo?id=" + idFor(r) : "", date: r.date, time: r.time, nights: +r.nights, tour: r.tour,
-        hotel: r.hotel, region: r.region, stars: r.stars, meal: r.meal, mealText: r.mealText, room: r.room,
-        price, perPerson: Math.round(price / pax), currency: "USD", code: r.code, seats: r.seats
-      };
-    })
+    .filter(r => r.currency === "USD" && r.seats !== "yo'q") // joyi yo'q turlarni ko'rsatmaymiz
+    .map(r => toClient(r, q))
     .sort((a, b) => a.price - b.price)
     .slice(0, 300);
   const data = { at: new Date().toISOString(), total: results.length, operators: ops, results };
@@ -137,6 +148,14 @@ const MIME = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".
 http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://x");
   try {
+    // Telegram webhook (Render): xabar keldi — darhol 200 qaytaramiz, botga uzatamiz
+    if (botWebhook && req.method === "POST" && url.pathname === botWebhook.path) {
+      if (req.headers["x-telegram-bot-api-secret-token"] !== botWebhook.secret) return send(res, 403, { error: "no" });
+      const body = await readBody(req).catch(() => "");
+      send(res, 200, { ok: true });
+      try { botWebhook.handle(JSON.parse(body || "{}")); } catch {}
+      return;
+    }
     if (req.method === "OPTIONS") return send(res, 204, "");
     if (url.pathname === "/api/ping") return send(res, 200, { ok: true, at: Date.now() });
     if (url.pathname === "/api/countries") return send(res, 200, await countries());
@@ -188,6 +207,23 @@ http.createServer(async (req, res) => {
       const okT = tourists.length === pax && tourists.every(t => t && t.last && t.first && /^\d{4}-\d{2}-\d{2}$/.test(t.birth || "") && (t.passport || "").length >= 6 && /^\d{4}-\d{2}-\d{2}$/.test(t.passportExp || ""));
       const phone = String(b.phone || "").replace(/[^\d+]/g, "");
       if (!okT || phone.replace(/\D/g, "").length < 12) return send(res, 400, { error: "Turistlar ma'lumoti yoki telefon to'liq emas" });
+      // To'lovdan oldin jonli tekshiruv: bu tur operatorda hozir ham shu narxda bormi? (RECHECK=0 bilan o'chiriladi)
+      const op = ACTIVE.find(o => o.key === hit.r.op);
+      if (op && process.env.RECHECK !== "0") {
+        const chk = await recheck(op, hit.r, hit.q);
+        if (chk.status === "sold_out") {
+          const alternatives = chk.alternatives.map(x => toClient(x, hit.q));
+          return send(res, 409, { status: "sold_out", error: "Afsuski, bu turda joy qolmadi. Shu sanaga boshqa variantlar:", alternatives });
+        }
+        if (chk.status === "price_changed") {
+          const nr = toClient(chk.fresh, hit.q);
+          return send(res, 409, { status: "price_changed", error: `Operator narxni o'zgartirdi: endi $${nr.price}. Rozi bo'lsangiz, yana «To'lovga o'tish»ni bosing.`, rid: nr.rid, price: nr.price, perPerson: nr.perPerson });
+        }
+        // "error" — operator javob bermadi: buyurtma qabul qilinadi, to'lovdan keyingi bron baribir tekshiradi
+        if (chk.status === "error") telegram(`⚠️ Jonli tekshiruv o'tmadi (${op.name}: ${chk.error}). ${hit.r.hotel}, ${hit.r.date} — to'lovdan keyin qo'lda tekshiring.`).catch(() => {});
+      }
+      // Onlayn to'lov ulanmagan bo'lsa — sayt buyurtmani ariza sifatida Telegramga yuboradi (503)
+      if (!paymentsEnabled()) return send(res, 503, { error: "Onlayn to'lov hali ulanmagan — ariza menejerga yuboriladi" });
       const rate = await usdRate();
       const amountUzs = Math.ceil(hit.price * rate / 1000) * 1000;
       const r = hit.r;
