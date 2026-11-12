@@ -642,8 +642,8 @@ const CONFIG = {
   address: "",                     // ofis manzili
   hours: "Du–Sh 09:00–19:00",      // ish vaqti
   // Arizalar shu manzilga yuboriladi, u yerdan Telegram botga tushadi (Netlify funksiyasi)
-  endpoint: "/api/ariza",
-  api: "/api"            // tur paket qidiruvi (o'z serveringiz)
+  endpoint: (/github\.io$|claude\.ai$|claudeusercontent\.com$/.test(location.hostname) ? "https://vella-tour.onrender.com/api/ariza" : "/api/ariza"),
+  api: (/github\.io$|claude\.ai$|claudeusercontent\.com$/.test(location.hostname) ? "https://vella-tour.onrender.com/api" : "/api")            // tur paket qidiruvi (o'z serveringiz)
 };
 
 /* ====== TURLAR — o'z turlaringizni shu yerga yozing ======
@@ -1444,6 +1444,7 @@ function openPkg(r){
     try{res=await fetch(CONFIG.api+"/order",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({rid:r.rid,tourists,phone,email:$("kMail").value.trim()})})}catch(_){}
     if(res&&res.ok){showPay(await res.json());return}
     if(res&&res.status===410){btn.disabled=false;btn.textContent=t("toPay");return err(t("errOld"))}
+    if(res&&res.status===409){const j=await res.json().catch(()=>({}));btn.disabled=false;btn.textContent=t("toPay");if(j.rid){r.rid=j.rid;r.price=j.price;r.perPerson=j.perPerson}return err((j.error||t("errOld"))+(j.alternatives&&j.alternatives.length?" "+j.alternatives.map(a=>a.hotel+" — $"+a.price).join("; "):""))}
     if(res&&res.status===400){btn.disabled=false;btn.textContent=t("toPay");return err(t("errTour"))}
     const name=tourists[0].last+" "+tourists[0].first;
     const text=leadText(name,phone);
