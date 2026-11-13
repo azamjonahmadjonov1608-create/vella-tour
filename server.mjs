@@ -53,6 +53,13 @@ function dailySnapshot() {
   };
   setInterval(tick, 10 * 60 * 1000).unref(); setTimeout(tick, 30000);
 } // menejer qidiruvlari 10 daqiqa saqlanadi (taklif uchun boshqa mehmonxonalarni tanlaganda qayta qidirmaslik uchun)
+// Render bepul serveri 15 daqiqa so'rovsiz qolsa uxlaydi — bot javob bermay qoladi.
+// Server o'zining ochiq manziliga har 9 daqiqada so'rov yuborib, uyg'oq turadi (+ GitHub Actions'dagi keepalive.yml zaxira).
+function keepAwake() {
+  const url = process.env.RENDER_EXTERNAL_URL;
+  if (!url) return;
+  setInterval(() => fetch(url + "/api/ping", { signal: AbortSignal.timeout(20000) }).catch(() => {}), 9 * 60 * 1000);
+}
 const RESULTS = new Map(); // rid -> { r (operator ma'lumoti bilan), q, price, at } — narxni mijoz o'zgartira olmasligi uchun
 initOrders(path.join(DIR, "data"));
 initPhotos(path.join(DIR, "data"));
@@ -293,4 +300,4 @@ http.createServer(async (req, res) => {
   } catch (e) {
     send(res, 500, { error: String(e.message || e) });
   }
-}).listen(PORT, () => (startBot(), dailySnapshot(), console.log(`Vella Tour server: http://localhost:${PORT}  (operatorlar: ${ACTIVE.map(o => o.name).join(", ")})`)));
+}).listen(PORT, () => (startBot(), dailySnapshot(), keepAwake(), console.log(`Vella Tour server: http://localhost:${PORT}  (operatorlar: ${ACTIVE.map(o => o.name).join(", ")})`)));
